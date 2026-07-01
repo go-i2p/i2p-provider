@@ -1,0 +1,21 @@
+name: CI (Prebuilt I2P Router Workflow)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  i2p-router-integration:
+    name: Reusable router workflow (${{ matrix.backend }})
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - java
+          - i2pd
+    uses: ./.github/workflows/i2p-router.yml
+    with:
+      backend: ${{ matrix.backend }}
