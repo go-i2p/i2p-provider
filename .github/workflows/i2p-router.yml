@@ -241,13 +241,13 @@ jobs:
               if [[ "$BACKEND" == "java" ]]; then
                 if curl -fsS -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                  "$I2P_ROUTER_I2PCONTROL_URL" >/dev/null; then
+                  "$i2pcontrol_url" >/dev/null; then
                   break
                 fi
               else
                 if curl -kfsS -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                  "$I2P_ROUTER_I2PCONTROL_URL" >/dev/null; then
+                  "$i2pcontrol_url" >/dev/null; then
                   break
                 fi
               fi
@@ -257,17 +257,17 @@ jobs:
             if [[ "$BACKEND" == "java" ]]; then
               token=$(curl -fsS -H 'Content-Type: application/json' \
                 -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                "$I2P_ROUTER_I2PCONTROL_URL" | jq -r '.result.Token')
+                "$i2pcontrol_url" | jq -r '.result.Token')
               curl -fsS -H 'Content-Type: application/json' \
                 -d "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"RouterInfo\",\"params\":{\"Token\":\"$token\",\"i2p.router.version\":\"\"}}" \
-                "$I2P_ROUTER_I2PCONTROL_URL" >/dev/null
+                "$i2pcontrol_url" >/dev/null
             else
               token=$(curl -kfsS -H 'Content-Type: application/json' \
                 -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                "$I2P_ROUTER_I2PCONTROL_URL" | jq -r '.result.Token')
+                "$i2pcontrol_url" | jq -r '.result.Token')
               curl -kfsS -H 'Content-Type: application/json' \
                 -d "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"RouterInfo\",\"params\":{\"Token\":\"$token\",\"i2p.router.version\":\"\"}}" \
-                "$I2P_ROUTER_I2PCONTROL_URL" >/dev/null
+                "$i2pcontrol_url" >/dev/null
             fi
           fi
 
