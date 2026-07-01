@@ -547,37 +547,22 @@ jobs:
           fi
 
           if [[ "$i2pcontrol_enabled" == true && "$ENDPOINT" == "i2pcontrol" ]]; then
+            i2pcontrol_payload='{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}'
+            curl_insecure_flag=""
+            [[ "$BACKEND" != "java" ]] && curl_insecure_flag="-k"
+
             for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
-              if [[ "$BACKEND" == "java" ]]; then
-                if curl -fsS -H 'Content-Type: application/json' \
-                  -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                  "$i2pcontrol_url" >/dev/null 2>&1; then
-                  break
-                fi
-              else
-                if curl -kfsS -H 'Content-Type: application/json' \
-                  -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                  "$i2pcontrol_url" >/dev/null 2>&1; then
-                  break
-                fi
+              if curl $curl_insecure_flag -fsS -H 'Content-Type: application/json' \
+                -d "$i2pcontrol_payload" "$i2pcontrol_url" >/dev/null 2>&1; then
+                break
               fi
               sleep 1
             done
 
-            if [[ "$BACKEND" == "java" ]]; then
-              if ! curl -fsS -H 'Content-Type: application/json' \
-                -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                "$i2pcontrol_url" >/dev/null 2>&1; then
-                echo "I2PControl did not become ready at $i2pcontrol_url" >&2
-                exit 1
-              fi
-            else
-              if ! curl -kfsS -H 'Content-Type: application/json' \
-                -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
-                "$i2pcontrol_url" >/dev/null 2>&1; then
-                echo "I2PControl did not become ready at $i2pcontrol_url" >&2
-                exit 1
-              fi
+            if ! curl $curl_insecure_flag -fsS -H 'Content-Type: application/json' \
+              -d "$i2pcontrol_payload" "$i2pcontrol_url" >/dev/null 2>&1; then
+              echo "I2PControl did not become ready at $i2pcontrol_url" >&2
+              exit 1
             fi
           fi
 
