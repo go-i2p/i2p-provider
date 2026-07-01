@@ -30,6 +30,7 @@ jobs:
       options: --init
     env:
       BACKEND: ${{ inputs.backend || 'java' }}
+      JAVA_I2P_USER: i2prouter
       HOME: /tmp/i2p-router-home
       I2P_HOME: /tmp/i2p-router-home
       I2P_WORKDIR: /tmp/i2p-router-work
@@ -70,6 +71,9 @@ jobs:
                 > /etc/apt/sources.list.d/i2p.list
               apt-get update
               apt-get install -y --no-install-recommends i2p i2p-keyring
+              if ! id -u "$JAVA_I2P_USER" >/dev/null 2>&1; then
+                useradd --home-dir "$I2P_HOME" --create-home --shell /usr/sbin/nologin "$JAVA_I2P_USER"
+              fi
               ;;
             i2pd)
               apt-get install -y --no-install-recommends i2pd
@@ -110,11 +114,12 @@ jobs:
             mkdir -p "$I2P_HOME/.i2p"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
             cp "$config_dir/java/clients.config" "$I2P_HOME/.i2p/clients.config"
+            chown -R "$JAVA_I2P_USER:$JAVA_I2P_USER" "$I2P_HOME"
 
             sam_enabled=true
             i2pcontrol_enabled=true
             i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
-            command=(i2prouter console)
+            command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 
           write_i2pd_config() {
@@ -369,6 +374,9 @@ jobs:
                 > /etc/apt/sources.list.d/i2p.list
               apt-get update
               apt-get install -y --no-install-recommends i2p i2p-keyring
+              if ! id -u "$JAVA_I2P_USER" >/dev/null 2>&1; then
+                useradd --home-dir "$I2P_HOME" --create-home --shell /usr/sbin/nologin "$JAVA_I2P_USER"
+              fi
               ;;
             i2pd)
               apt-get install -y --no-install-recommends i2pd
@@ -409,11 +417,12 @@ jobs:
             mkdir -p "$I2P_HOME/.i2p"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
             cp "$config_dir/java/clients.config" "$I2P_HOME/.i2p/clients.config"
+            chown -R "$JAVA_I2P_USER:$JAVA_I2P_USER" "$I2P_HOME"
 
             sam_enabled=true
             i2pcontrol_enabled=true
             i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
-            command=(i2prouter console)
+            command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 
           write_i2pd_config() {
