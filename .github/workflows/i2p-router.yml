@@ -121,7 +121,7 @@ jobs:
 
             sam_enabled=true
             i2pcontrol_enabled=true
-            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
+            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc"
             command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 
@@ -428,7 +428,7 @@ jobs:
 
             sam_enabled=true
             i2pcontrol_enabled=true
-            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
+            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc"
             command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 
