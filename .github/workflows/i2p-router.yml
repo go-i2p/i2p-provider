@@ -224,7 +224,7 @@ jobs:
           fi
 
           if [[ "$sam_enabled" == true ]]; then
-            for _ in $(seq 1 60); do
+            for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
               if bash -c '</dev/tcp/127.0.0.1/7656' >/dev/null 2>&1; then
                 break
               fi
@@ -238,7 +238,7 @@ jobs:
           fi
 
           if [[ "$i2pcontrol_enabled" == true ]]; then
-            for _ in $(seq 1 60); do
+            for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
               if [[ "$BACKEND" == "java" ]]; then
                 if curl -fsS -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
@@ -334,6 +334,7 @@ jobs:
           - i2pcontrol
     env:
       BACKEND: ${{ inputs.backend || 'java' }}
+      JAVA_I2P_USER: i2prouter
       HOME: /tmp/i2p-router-home
       I2P_HOME: /tmp/i2p-router-home
       I2P_WORKDIR: /tmp/i2p-router-work
