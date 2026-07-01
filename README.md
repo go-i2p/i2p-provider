@@ -29,7 +29,7 @@ The workflow backend is configurable through the `backend` input and defaults to
 The workflow keeps router-specific config out of the YAML and stores it under [.github/i2p-router/](.github/i2p-router/).
 
 - [.github/i2p-router/java/router.config](.github/i2p-router/java/router.config)
-- [.github/i2p-router/java/clients.config](.github/i2p-router/java/clients.config)
+- [.github/i2p-router/java/01-net.i2p.sam.SAMBridge-clients.config](.github/i2p-router/java/01-net.i2p.sam.SAMBridge-clients.config)
 - [.github/i2p-router/i2pd/i2pd.conf](.github/i2p-router/i2pd/i2pd.conf)
 
 ## Usage
