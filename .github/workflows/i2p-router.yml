@@ -113,6 +113,7 @@ jobs:
           write_java_config() {
             mkdir -p "$I2P_HOME/.i2p/clients.config.d"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
+            cp "$config_dir/java/webapps.config" "$I2P_HOME/.i2p/webapps.config"
             cp "$config_dir/java/00-routerconsole-clients.config" \
               "$I2P_HOME/.i2p/clients.config.d/00-routerconsole-clients.config"
             cp "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config" \
@@ -121,7 +122,7 @@ jobs:
 
             sam_enabled=true
             i2pcontrol_enabled=true
-            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc"
+            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
             command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 
@@ -420,6 +421,7 @@ jobs:
           write_java_config() {
             mkdir -p "$I2P_HOME/.i2p/clients.config.d"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
+            cp "$config_dir/java/webapps.config" "$I2P_HOME/.i2p/webapps.config"
             cp "$config_dir/java/00-routerconsole-clients.config" \
               "$I2P_HOME/.i2p/clients.config.d/00-routerconsole-clients.config"
             cp "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config" \
@@ -428,7 +430,7 @@ jobs:
 
             sam_enabled=true
             i2pcontrol_enabled=true
-            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc"
+            i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
             command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
           }
 

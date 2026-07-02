@@ -11,7 +11,7 @@ The workflow includes a startup smoke check and a separate endpoint matrix job.
 - Starts an I2P router in hidden / non-transit mode.
 - Binds I2CP to `127.0.0.1:7654`.
 - Enables SAM on `127.0.0.1:7656` only for backends that support it in this harness.
-- Exposes I2PControl for Java on `http://127.0.0.1:7657/jsonrpc` and for i2pd on `https://127.0.0.1:7650/`.
+- Exposes I2PControl for Java on `http://127.0.0.1:7657/jsonrpc/` and for i2pd on `https://127.0.0.1:7650/`.
 - Sends `TERM` on cleanup and waits for graceful shutdown.
 
 ## Supported backends
@@ -29,6 +29,7 @@ The workflow backend is configurable through the `backend` input and defaults to
 The workflow keeps router-specific config out of the YAML and stores it under [.github/i2p-router/](.github/i2p-router/).
 
 - [.github/i2p-router/java/router.config](.github/i2p-router/java/router.config)
+- [.github/i2p-router/java/webapps.config](.github/i2p-router/java/webapps.config)
 - [.github/i2p-router/java/01-net.i2p.sam.SAMBridge-clients.config](.github/i2p-router/java/01-net.i2p.sam.SAMBridge-clients.config)
 - [.github/i2p-router/i2pd/i2pd.conf](.github/i2p-router/i2pd/i2pd.conf)
 
