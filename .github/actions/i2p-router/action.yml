@@ -110,6 +110,17 @@ runs:
             fi
             ;;
           i2pd)
+            # Ubuntu 24.04's archive package (2.49.0) is badly outdated and
+            # is known to crash under real network load (observed:
+            # "double free or corruption (!prev)", SIGABRT, a few minutes
+            # into normal operation - fixed upstream across many releases
+            # since, e.g. "fixed different crashes on high load and
+            # shutdown", "fixed random NetDb crash on stop", "fixed crash
+            # after SAM stream disconnect"). Install from PurpleI2P's own
+            # PPA instead, which tracks upstream releases.
+            apt-get install -y --no-install-recommends software-properties-common gnupg
+            add-apt-repository -y ppa:purplei2p/i2pd
+            apt-get update
             apt-get install -y --no-install-recommends i2pd
             # The Debian/Ubuntu i2pd package ships a systemd unit and
             # init.d script that are enabled by default (WantedBy:
