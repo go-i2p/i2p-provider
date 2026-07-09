@@ -82,6 +82,7 @@ runs:
           ca-certificates \
           curl \
           git \
+          iproute2 \
           jq \
           netcat-openbsd \
           procps \
@@ -110,6 +111,20 @@ runs:
             ;;
           i2pd)
             apt-get install -y --no-install-recommends i2pd
+            # The Debian/Ubuntu i2pd package ships a systemd unit and
+            # init.d script that are enabled by default (WantedBy:
+            # multi-user.target). On runners where systemd is actually
+            # active (i.e. a job that does NOT use the container: wrapper),
+            # installing the package auto-starts a second, unmanaged i2pd
+            # instance using /etc/i2pd/i2pd.conf, which races with - and can
+            # steal the ports from - the instance this action launches
+            # explicitly below. Stop and disable it defensively; these are
+            # all no-ops when systemd/the service isn't present (e.g. inside
+            # a plain container).
+            systemctl stop i2pd >/dev/null 2>&1 || true
+            systemctl disable i2pd >/dev/null 2>&1 || true
+            service i2pd stop >/dev/null 2>&1 || true
+            pkill -f '^/usr/sbin/i2pd' >/dev/null 2>&1 || true
             ;;
           go-i2p)
             apt-get install -y --no-install-recommends golang-go build-essential
@@ -246,6 +261,25 @@ runs:
           echo "I2P_ROUTER_I2PCONTROL_ENABLED=$i2pcontrol_enabled"
           echo "I2P_ROUTER_I2PCONTROL_URL=$i2pcontrol_url"
         } >> "$GITHUB_ENV"
+
+        port_in_use() {
+          bash -c "</dev/tcp/127.0.0.1/$1" >/dev/null 2>&1
+        }
+
+        # Fail fast with a clear diagnostic if something (e.g. a
+        # distro-packaged service that started on its own) is already
+        # bound to one of our target ports, rather than letting the
+        # readiness checks below report a false-positive "ready" against
+        # a process this action didn't start.
+        preflight_ports=(7654)
+        [[ "$sam_enabled" == true ]] && preflight_ports+=("$sam_tcp_port")
+        for port in "${preflight_ports[@]}"; do
+          if port_in_use "$port"; then
+            echo "Port $port is already in use before starting the router - is another instance (e.g. a distro-packaged service) already running?" >&2
+            ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null || true
+            exit 1
+          fi
+        done
 
         start_router() {
           trap 'if [[ -f "$router_pid_file" ]]; then kill -TERM "$(cat "$router_pid_file")" 2>/dev/null || true; fi' INT TERM EXIT
