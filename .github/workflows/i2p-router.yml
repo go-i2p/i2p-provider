@@ -13,6 +13,11 @@ on:
           - i2pd
           - emissary
           - go-i2p
+      fixtures_ref:
+        description: git ref of go-i2p/i2p-provider to pull router config fixtures from
+        required: false
+        type: string
+        default: main
   workflow_call:
     inputs:
       backend:
@@ -20,6 +25,11 @@ on:
         required: false
         type: string
         default: java
+      fixtures_ref:
+        description: git ref of go-i2p/i2p-provider to pull router config fixtures from
+        required: false
+        type: string
+        default: main
 
 jobs:
   router:
@@ -40,6 +50,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Check out I2P router fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: go-i2p/i2p-provider
+          ref: ${{ inputs.fixtures_ref || 'main' }}
+          path: i2p-provider-fixtures
 
       - name: Install base tooling
         shell: bash
@@ -100,7 +117,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p "$I2P_HOME" "$I2P_WORKDIR" "$I2P_STATE_DIR" "$I2P_PID_DIR"
-          config_dir="$GITHUB_WORKSPACE/.github/i2p-router"
+          config_dir="$GITHUB_WORKSPACE/i2p-provider-fixtures/.github/i2p-router"
 
           router_pid_file="$I2P_PID_DIR/router.pid"
           wrapper_pid_file="$I2P_PID_DIR/wrapper.pid"
@@ -110,8 +127,21 @@ jobs:
           sam_tcp_port=7656
           sam_udp_port=7655
 
+          require_config_file() {
+            local file="$1"
+            if [[ ! -f "$file" ]]; then
+              echo "Required router config file not found: $file" >&2
+              echo "Contents of $config_dir:" >&2
+              find "$config_dir" 2>/dev/null >&2 || echo "  ($config_dir does not exist)" >&2
+              exit 1
+            fi
+          }
+
           write_java_config() {
             mkdir -p "$I2P_HOME/.i2p/clients.config.d"
+            require_config_file "$config_dir/java/router.config"
+            require_config_file "$config_dir/java/00-routerconsole-clients.config"
+            require_config_file "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
             cp "$config_dir/java/00-routerconsole-clients.config" \
               "$I2P_HOME/.i2p/clients.config.d/00-routerconsole-clients.config"
@@ -126,6 +156,7 @@ jobs:
           }
 
           write_i2pd_config() {
+            require_config_file "$config_dir/i2pd/i2pd.conf"
             cp "$config_dir/i2pd/i2pd.conf" "$I2P_STATE_DIR/i2pd.conf"
             sam_enabled=true
             i2pcontrol_enabled=true
@@ -348,6 +379,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check out I2P router fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: go-i2p/i2p-provider
+          ref: ${{ inputs.fixtures_ref || 'main' }}
+          path: i2p-provider-fixtures
+
       - name: Install base tooling
         shell: bash
         run: |
@@ -407,7 +445,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p "$I2P_HOME" "$I2P_WORKDIR" "$I2P_STATE_DIR" "$I2P_PID_DIR"
-          config_dir="$GITHUB_WORKSPACE/.github/i2p-router"
+          config_dir="$GITHUB_WORKSPACE/i2p-provider-fixtures/.github/i2p-router"
 
           router_pid_file="$I2P_PID_DIR/router.pid"
           wrapper_pid_file="$I2P_PID_DIR/wrapper.pid"
@@ -417,8 +455,21 @@ jobs:
           sam_tcp_port=7656
           sam_udp_port=7655
 
+          require_config_file() {
+            local file="$1"
+            if [[ ! -f "$file" ]]; then
+              echo "Required router config file not found: $file" >&2
+              echo "Contents of $config_dir:" >&2
+              find "$config_dir" 2>/dev/null >&2 || echo "  ($config_dir does not exist)" >&2
+              exit 1
+            fi
+          }
+
           write_java_config() {
             mkdir -p "$I2P_HOME/.i2p/clients.config.d"
+            require_config_file "$config_dir/java/router.config"
+            require_config_file "$config_dir/java/00-routerconsole-clients.config"
+            require_config_file "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config"
             cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
             cp "$config_dir/java/00-routerconsole-clients.config" \
               "$I2P_HOME/.i2p/clients.config.d/00-routerconsole-clients.config"
@@ -433,6 +484,7 @@ jobs:
           }
 
           write_i2pd_config() {
+            require_config_file "$config_dir/i2pd/i2pd.conf"
             cp "$config_dir/i2pd/i2pd.conf" "$I2P_STATE_DIR/i2pd.conf"
             sam_enabled=true
             i2pcontrol_enabled=true
