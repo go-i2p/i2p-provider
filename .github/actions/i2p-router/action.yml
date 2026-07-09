@@ -1,0 +1,338 @@
+name: Start I2P Router
+description: >-
+  Starts an I2P router backend (java, i2pd, go-i2p, or emissary) as a
+  background process for the remainder of the current job. Must be added as a
+  step in your own job (after checking out your repository) so that
+  subsequent steps in that same job can reach the router over localhost.
+  Because GitHub Actions jobs each run on an isolated runner/container, the
+  router process cannot be shared across job boundaries - do not call this
+  repository's reusable workflow (i2p-router.yml) expecting its background
+  router to be reachable from a separate downstream job.
+
+inputs:
+  backend:
+    description: Router backend to start (java, i2pd, go-i2p, emissary)
+    required: false
+    default: java
+  fixtures_ref:
+    description: git ref of go-i2p/i2p-provider to pull router config fixtures from
+    required: false
+    default: main
+
+outputs:
+  backend:
+    description: The backend that was started
+    value: ${{ steps.launch.outputs.backend }}
+  i2cp-host:
+    description: I2CP host
+    value: ${{ steps.launch.outputs.i2cp-host }}
+  i2cp-port:
+    description: I2CP port
+    value: ${{ steps.launch.outputs.i2cp-port }}
+  sam-enabled:
+    description: Whether SAM is enabled for this backend
+    value: ${{ steps.launch.outputs.sam-enabled }}
+  sam-host:
+    description: SAM host
+    value: ${{ steps.launch.outputs.sam-host }}
+  sam-tcp-port:
+    description: SAM TCP port
+    value: ${{ steps.launch.outputs.sam-tcp-port }}
+  sam-udp-port:
+    description: SAM UDP port
+    value: ${{ steps.launch.outputs.sam-udp-port }}
+  i2pcontrol-enabled:
+    description: Whether I2PControl is enabled for this backend
+    value: ${{ steps.launch.outputs.i2pcontrol-enabled }}
+  i2pcontrol-url:
+    description: I2PControl JSON-RPC URL
+    value: ${{ steps.launch.outputs.i2pcontrol-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure environment
+      shell: bash
+      run: |
+        set -euo pipefail
+        {
+          echo "JAVA_I2P_USER=i2prouter"
+          echo "HOME=/tmp/i2p-router-home"
+          echo "I2P_HOME=/tmp/i2p-router-home"
+          echo "I2P_WORKDIR=/tmp/i2p-router-work"
+          echo "I2P_STATE_DIR=/tmp/i2p-router-state"
+          echo "I2P_PID_DIR=/tmp/i2p-router-pids"
+          echo "I2P_READY_TIMEOUT_SECONDS=300"
+        } >> "$GITHUB_ENV"
+
+    - name: Check out I2P router fixtures
+      uses: actions/checkout@v4
+      with:
+        repository: go-i2p/i2p-provider
+        ref: ${{ inputs.fixtures_ref }}
+        path: i2p-provider-fixtures
+
+    - name: Install base tooling
+      shell: bash
+      run: |
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          curl \
+          git \
+          jq \
+          netcat-openbsd \
+          procps \
+          unzip \
+          xz-utils
+
+    - name: Install backend runtime
+      shell: bash
+      env:
+        BACKEND: ${{ inputs.backend }}
+      run: |
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+
+        case "$BACKEND" in
+          java)
+            apt-get install -y --no-install-recommends openjdk-17-jre-headless apt-transport-https lsb-release curl
+            curl -fsSL -o /usr/share/keyrings/i2p-archive-keyring.gpg https://i2p.net/i2p-archive-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/i2p-archive-keyring.gpg] https://deb.i2p.net/ $(lsb_release -sc) main" \
+              > /etc/apt/sources.list.d/i2p.list
+            apt-get update
+            apt-get install -y --no-install-recommends i2p i2p-keyring
+            if ! id -u "$JAVA_I2P_USER" >/dev/null 2>&1; then
+              useradd --home-dir "$I2P_HOME" --create-home --shell /usr/sbin/nologin "$JAVA_I2P_USER"
+            fi
+            ;;
+          i2pd)
+            apt-get install -y --no-install-recommends i2pd
+            ;;
+          go-i2p)
+            apt-get install -y --no-install-recommends golang-go build-essential
+            go install github.com/go-i2p/go-i2p@latest
+            echo "$HOME/go/bin" >> "$GITHUB_PATH"
+            ;;
+          emissary)
+            apt-get install -y --no-install-recommends cargo rustc build-essential pkg-config libssl-dev
+            cargo install --git https://github.com/EmissaryI2P/emissary --locked
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            ;;
+          *)
+            echo "Unsupported backend: $BACKEND" >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Launch router
+      id: launch
+      shell: bash
+      env:
+        BACKEND: ${{ inputs.backend }}
+      run: |
+        set -euo pipefail
+
+        mkdir -p "$I2P_HOME" "$I2P_WORKDIR" "$I2P_STATE_DIR" "$I2P_PID_DIR"
+        config_dir="$GITHUB_WORKSPACE/i2p-provider-fixtures/.github/i2p-router"
+
+        router_pid_file="$I2P_PID_DIR/router.pid"
+        wrapper_pid_file="$I2P_PID_DIR/wrapper.pid"
+        sam_enabled=false
+        i2pcontrol_enabled=false
+        i2pcontrol_url=""
+        sam_tcp_port=7656
+        sam_udp_port=7655
+
+        require_config_file() {
+          local file="$1"
+          if [[ ! -f "$file" ]]; then
+            echo "Required router config file not found: $file" >&2
+            echo "Contents of $config_dir:" >&2
+            find "$config_dir" 2>/dev/null >&2 || echo "  ($config_dir does not exist)" >&2
+            exit 1
+          fi
+        }
+
+        write_java_config() {
+          mkdir -p "$I2P_HOME/.i2p/clients.config.d"
+          require_config_file "$config_dir/java/router.config"
+          require_config_file "$config_dir/java/00-routerconsole-clients.config"
+          require_config_file "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config"
+          cp "$config_dir/java/router.config" "$I2P_HOME/.i2p/router.config"
+          cp "$config_dir/java/webapps.config" "$I2P_HOME/.i2p/webapps.config"
+          cp "$config_dir/java/00-routerconsole-clients.config" \
+            "$I2P_HOME/.i2p/clients.config.d/00-routerconsole-clients.config"
+          cp "$config_dir/java/01-net.i2p.sam.SAMBridge-clients.config" \
+            "$I2P_HOME/.i2p/clients.config.d/01-net.i2p.sam.SAMBridge-clients.config"
+          chown -R "$JAVA_I2P_USER:$JAVA_I2P_USER" "$I2P_HOME"
+
+          sam_enabled=true
+          i2pcontrol_enabled=true
+          i2pcontrol_url="http://127.0.0.1:7657/jsonrpc/"
+          command=(runuser -u "$JAVA_I2P_USER" -- env HOME="$I2P_HOME" i2prouter console)
+        }
+
+        write_i2pd_config() {
+          require_config_file "$config_dir/i2pd/i2pd.conf"
+          cp "$config_dir/i2pd/i2pd.conf" "$I2P_STATE_DIR/i2pd.conf"
+          sam_enabled=true
+          i2pcontrol_enabled=true
+          i2pcontrol_url="https://127.0.0.1:7650/"
+          command=(i2pd --conf "$I2P_STATE_DIR/i2pd.conf")
+        }
+
+        write_go_i2p_config() {
+          sam_enabled=false
+          i2pcontrol_enabled=false
+          command=(go-i2p \
+            --router.hidden=true \
+            --router.accept-tunnels=false \
+            --i2cp.enabled=true \
+            --i2cp.address=127.0.0.1:7654 \
+            --i2pcontrol.enabled=false)
+        }
+
+        write_emissary_config() {
+          sam_enabled=false
+          i2pcontrol_enabled=false
+
+          if [[ -n "${EMISSARY_START_COMMAND:-}" ]]; then
+            read -r -a command <<< "${EMISSARY_START_COMMAND}"
+            return
+          fi
+
+          if [[ -n "${EMISSARY_BINARY:-}" ]]; then
+            command=("${EMISSARY_BINARY}")
+          else
+            command=(emissary)
+          fi
+
+          if [[ -n "${EMISSARY_ARGS:-}" ]]; then
+            read -r -a extra_args <<< "${EMISSARY_ARGS}"
+            command+=("${extra_args[@]}")
+          fi
+        }
+
+        case "$BACKEND" in
+          java)
+            write_java_config
+            ;;
+          i2pd)
+            write_i2pd_config
+            ;;
+          go-i2p)
+            write_go_i2p_config
+            ;;
+          emissary)
+            write_emissary_config
+            ;;
+          *)
+            echo "Unsupported backend: $BACKEND" >&2
+            exit 1
+            ;;
+        esac
+
+        {
+          echo "I2P_ROUTER_BACKEND=$BACKEND"
+          echo "I2P_ROUTER_I2CP_HOST=127.0.0.1"
+          echo "I2P_ROUTER_I2CP_PORT=7654"
+          echo "I2P_ROUTER_SAM_ENABLED=$sam_enabled"
+          echo "I2P_ROUTER_SAM_HOST=127.0.0.1"
+          echo "I2P_ROUTER_SAM_TCP_PORT=$sam_tcp_port"
+          echo "I2P_ROUTER_SAM_UDP_PORT=$sam_udp_port"
+          echo "I2P_ROUTER_I2PCONTROL_ENABLED=$i2pcontrol_enabled"
+          echo "I2P_ROUTER_I2PCONTROL_URL=$i2pcontrol_url"
+        } >> "$GITHUB_ENV"
+
+        start_router() {
+          trap 'if [[ -f "$router_pid_file" ]]; then kill -TERM "$(cat "$router_pid_file")" 2>/dev/null || true; fi' INT TERM EXIT
+
+          "${command[@]}" &
+          echo $! > "$router_pid_file"
+          wait "$!"
+        }
+
+        start_router &
+        echo $! > "$wrapper_pid_file"
+
+        for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
+          if ! kill -0 "$(cat "$wrapper_pid_file")" 2>/dev/null; then
+            echo "Router wrapper exited before readiness" >&2
+            exit 1
+          fi
+
+          if bash -c '</dev/tcp/127.0.0.1/7654' >/dev/null 2>&1; then
+            break
+          fi
+
+          sleep 1
+        done
+
+        if ! bash -c '</dev/tcp/127.0.0.1/7654' >/dev/null 2>&1; then
+          echo "I2CP did not become ready on 127.0.0.1:7654" >&2
+          exit 1
+        fi
+
+        if [[ "$sam_enabled" == true ]]; then
+          for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
+            if bash -c '</dev/tcp/127.0.0.1/7656' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+          if ! bash -c '</dev/tcp/127.0.0.1/7656' >/dev/null 2>&1; then
+            echo "SAM did not become ready on 127.0.0.1:7656" >&2
+            exit 1
+          fi
+        fi
+
+        if [[ "$i2pcontrol_enabled" == true ]]; then
+          for _ in $(seq 1 "$I2P_READY_TIMEOUT_SECONDS"); do
+            if [[ "$BACKEND" == "java" ]]; then
+              if curl -fsS -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
+                "$i2pcontrol_url" >/dev/null; then
+                break
+              fi
+            else
+              if curl -kfsS -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
+                "$i2pcontrol_url" >/dev/null; then
+                break
+              fi
+            fi
+            sleep 1
+          done
+
+          if [[ "$BACKEND" == "java" ]]; then
+            token=$(curl -fsS -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
+              "$i2pcontrol_url" | jq -r '.result.Token')
+            curl -fsS -H 'Content-Type: application/json' \
+              -d "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"RouterInfo\",\"params\":{\"Token\":\"$token\",\"i2p.router.version\":\"\"}}" \
+              "$i2pcontrol_url" >/dev/null
+          else
+            token=$(curl -kfsS -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":"1","method":"Authenticate","params":{"API":1,"Password":"itoopie"}}' \
+              "$i2pcontrol_url" | jq -r '.result.Token')
+            curl -kfsS -H 'Content-Type: application/json' \
+              -d "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"RouterInfo\",\"params\":{\"Token\":\"$token\",\"i2p.router.version\":\"\"}}" \
+              "$i2pcontrol_url" >/dev/null
+          fi
+        fi
+
+        {
+          echo "backend=$BACKEND"
+          echo "i2cp-host=127.0.0.1"
+          echo "i2cp-port=7654"
+          echo "sam-enabled=$sam_enabled"
+          echo "sam-host=127.0.0.1"
+          echo "sam-tcp-port=$sam_tcp_port"
+          echo "sam-udp-port=$sam_udp_port"
+          echo "i2pcontrol-enabled=$i2pcontrol_enabled"
+          echo "i2pcontrol-url=$i2pcontrol_url"
+        } >> "$GITHUB_OUTPUT"
