@@ -1,0 +1,30 @@
+name: Stop I2P Router
+description: >-
+  Stops the I2P router previously started by the go-i2p/i2p-provider
+  i2p-router action in this same job. Add this as a step with `if: always()`
+  after your test steps so the router is cleaned up even if a test fails.
+
+runs:
+  using: composite
+  steps:
+    - name: Stop router
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        pid_dir="${I2P_PID_DIR:-/tmp/i2p-router-pids}"
+        wrapper_pid_file="$pid_dir/wrapper.pid"
+        router_pid_file="$pid_dir/router.pid"
+
+        if [[ -f "$wrapper_pid_file" ]]; then
+          kill -TERM "$(cat "$wrapper_pid_file")" 2>/dev/null || true
+        fi
+
+        if [[ -f "$router_pid_file" ]]; then
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$(cat "$router_pid_file")" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+        fi
