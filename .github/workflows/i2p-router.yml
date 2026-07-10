@@ -49,6 +49,9 @@ on:
         required: false
         type: string
         default: java
+      test-command:
+        type: string
+        required: false
 
 jobs:
   router:
@@ -57,6 +60,15 @@ jobs:
     container:
       image: ubuntu:24.04
       options: --init
+    env:
+      BACKEND: ${{ inputs.backend || 'java' }}
+      JAVA_I2P_USER: i2prouter
+      HOME: /tmp/i2p-router-home
+      I2P_HOME: /tmp/i2p-router-home
+      I2P_WORKDIR: /tmp/i2p-router-work
+      I2P_STATE_DIR: /tmp/i2p-router-state
+      I2P_PID_DIR: /tmp/i2p-router-pids
+      I2P_READY_TIMEOUT_SECONDS: "300"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -114,6 +126,10 @@ jobs:
           fi
           echo "Insert I2P client tests for your application here."
 
+      - name: Run downstream test command
+        if: inputs.test-command != ''
+        shell: bash
+        run: ${{ inputs.test-command }}
       - name: Stop I2P router
         if: always()
         uses: ./.github/actions/i2p-router-stop
@@ -132,6 +148,14 @@ jobs:
           - sam
           - i2pcontrol
     env:
+      BACKEND: ${{ inputs.backend || 'java' }}
+      JAVA_I2P_USER: i2prouter
+      HOME: /tmp/i2p-router-home
+      I2P_HOME: /tmp/i2p-router-home
+      I2P_WORKDIR: /tmp/i2p-router-work
+      I2P_STATE_DIR: /tmp/i2p-router-state
+      I2P_PID_DIR: /tmp/i2p-router-pids
+      I2P_READY_TIMEOUT_SECONDS: "300"
       ENDPOINT: ${{ matrix.endpoint }}
     steps:
       - name: Check out repository
